@@ -1,31 +1,18 @@
 import streamlit as st
 import joblib
-import pandas as pd  # Pastikan import pandas untuk konversi DataFrame
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import LabelEncoder, RobustScaler
 
-sampel_data = {
-    'Nama': 'Axel', 'age': 35, 'sex': 1, 'region': 2, 'urban_rural': 1, 'income': 65000, 
-    'education': 2, 'marital_status': 1, 'employment_status': 1, 'household_size': 4, 
-    'dependents': 2, 'bmi': 24.5, 'smoker': 0, 'alcohol_freq': 1, 'visits_last_year': 2, 
-    'hospitalizations_last_3yrs': 0, 'days_hospitalized_last_3yrs': 0, 'medication_count': 1, 
-    'systolic_bp': 120, 'diastolic_bp': 80, 'ldl': 110, 'hba1c': 5.4, 'plan_type': 1, 
-    'network_tier': 2, 'deductible': 1500, 'copay': 20, 'policy_term_years': 5, 
-    'policy_changes_last_2yrs': 0, 'provider_quality': 1, 'risk_score': 12.5, 
-    'annual_medical_cost': 2500, 'annual_premium': 1200, 'monthly_premium': 100, 
-    'claims_count': 1, 'avg_claim_amount': 500, 'total_claims_paid': 500, 'chronic_count': 0, 
-    'hypertension': 0, 'diabetes': 0, 'asthma': 0, 'copd': 0, 'cardiovascular_disease': 0, 
-    'cancer_history': 0, 'kidney_disease': 0, 'liver_disease': 0, 'arthritis': 0, 
-    'mental_health': 0, 'proc_imaging_count': 1, 'proc_surgery_count': 0, 
-    'proc_physio_count': 0, 'proc_consult_count': 2, 'proc_lab_count': 1, 'had_major_procedure': 0
-}
-
+# --- 1. INISIALISASI SESSION STATE ---
 if "inputan" not in st.session_state:
     st.session_state.inputan = 1
     
 if "jawaban_user" not in st.session_state:
     st.session_state.jawaban_user = {}
 
-# Fungsi navigasi
-def next(nama_fitur):
+# Fungsi Navigasi
+def lanjut_step(nama_fitur):
     st.session_state.jawaban_user[nama_fitur] = st.session_state[nama_fitur]
     st.session_state.inputan += 1
 
@@ -37,26 +24,60 @@ def reset():
     st.session_state.clear()
     st.session_state.inputan = 1
     st.session_state.jawaban_user = {}
-    
-    # Ubah nama fungsinya
-def lanjut_step(nama_fitur):
-    st.session_state.jawaban_user[nama_fitur] = st.session_state[nama_fitur]
-    st.session_state.inputan += 1
 
-# --- CACHE MODEL ---
-# Menggunakan cache agar model tidak di-load ulang setiap kali user mengetik/klik tombol
+# --- 2. CACHE PREPROCESSING (SCALER & ENCODER) ---
+@st.cache_resource
+def setup_preprocessing():
+    # Mengantisipasi letak file csv di root atau di dalam folder deploy
+    try:
+        df = pd.read_csv('deploy/medical_insurance.csv')
+    except:
+        df = pd.read_csv('medical_insurance.csv')
+        
+    df['alcohol_freq'] = df['alcohol_freq'].fillna('Unknown')
+    
+    # Fit Label Encoders persis seperti di Cell 6 Notebook
+    cat_cols = ['sex', 'smoker', 'alcohol_freq']
+    encoders = {}
+    categories = {}
+    for col in cat_cols:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        encoders[col] = le
+        categories[col] = list(le.classes_)
+        
+    # 18 Fitur asli dari Cell 7 Notebook kamu
+    feature_cols = [
+        'age', 'sex', 'bmi', 'smoker', 'alcohol_freq',
+        'systolic_bp', 'diastolic_bp', 'ldl', 'hba1c',
+        'visits_last_year', 'hospitalizations_last_3yrs',
+        'days_hospitalized_last_3yrs', 'medication_count',
+        'proc_imaging_count', 'proc_surgery_count', 'proc_physio_count',
+        'proc_consult_count', 'proc_lab_count',
+    ]
+    
+    X = df[feature_cols]
+    scaler = RobustScaler()
+    scaler.fit(X)
+    
+    return scaler, encoders, feature_cols, categories
+
+scaler_obj, encoders_dict, feature_cols, categories_dict = setup_preprocessing()
+
+# --- 3. CACHE MODEL ML ---
 @st.cache_resource
 def load_all_models():
+    # Menyesuaikan nama file dengan versi ekstensi .pkl yang benar
     return {
         "XGBoost": joblib.load('deploy/XGB.pkl'),
-        "Linear Regression": joblib.load('deploy/LR.pkl'),
+        "Logistic Regression": joblib.load('deploy/LR.pkl'),
         "Random Forest": joblib.load('deploy/RF.pkl'),
         "Decision Tree": joblib.load('deploy/DT.pkl')
     }
 
 pilihan_model_dict = load_all_models()
 
-# 2. Bagian Header UI
+# --- 4. BAGIAN UI HEADER ---
 st.title("Medical Insurance 🏥")
 st.write("""
 **Kelompok:**
@@ -65,127 +86,117 @@ st.write("""
 3. Vincentius Axel S.P - 2802528554
 """)
 
-st.markdown("<h2 style='color:cyan'>Prediksi Health Insurance</h2>", unsafe_allow_html=True)
-st.write("Kami akan menganalisis prediksi apakah harga untuk asuransi kesehatan akan tinggi atau tidak. Model yang akan kami gunakan adalah **XGBoost** karena sejauh ini, dengan cara mengukur akurasi, presisi, dan F1-Score dan membandingkan antara Decision Tree, XGBoost, dan Random Forest, kami memilih model XGBoost karena ini adalah model terbaik untuk dataset ini dengan F1-score yang menyentuh angka 0.86, presisi di angka 0.91, dan akurasi di angka 0.90.")
+st.markdown("<h2 style='color:cyan'>Prediksi & Komparasi Risiko Kesehatan</h2>", unsafe_allow_html=True)
 
-st.markdown("<h2 style='color:cyan'>Penerapan Model</h2>", unsafe_allow_html=True)
+# Definisikan informasi ke-18 fitur agar UI-nya rapi dan otomatis terisi data sampel
+fitur_info = [
+    {"name": "age", "label": "Usia Pasien (Tahun)", "type": "number", "min": 0, "max": 120, "default": 35},
+    {"name": "sex", "label": "Jenis Kelamin", "type": "select"},
+    {"name": "bmi", "label": "Indeks Massa Tubuh (BMI)", "type": "float", "min": 10.0, "max": 60.0, "default": 24.5},
+    {"name": "smoker", "label": "Apakah Pasien Merokok?", "type": "select"},
+    {"name": "alcohol_freq", "label": "Konsumsi Alkohol", "type": "select"},
+    {"name": "systolic_bp", "label": "Tekanan Darah Sistolik (Atas)", "type": "number", "min": 50, "max": 250, "default": 120},
+    {"name": "diastolic_bp", "label": "Tekanan Darah Diastolik (Bawah)", "type": "number", "min": 30, "max": 150, "default": 80},
+    {"name": "ldl", "label": "Kadar Kolesterol LDL", "type": "number", "min": 10, "max": 300, "default": 110},
+    {"name": "hba1c", "label": "Tingkat HbA1c (Gula Darah)", "type": "float", "min": 3.0, "max": 15.0, "default": 5.4},
+    {"name": "visits_last_year", "label": "Jumlah Kunjungan Medis Tahun Lalu", "type": "number", "min": 0, "max": 50, "default": 2},
+    {"name": "hospitalizations_last_3yrs", "label": "Jumlah Rawat Inap (3 Tahun Terakhir)", "type": "number", "min": 0, "max": 10, "default": 0},
+    {"name": "days_hospitalized_last_3yrs", "label": "Total Hari Dirawat di RS (3 Tahun Terakhir)", "type": "number", "min": 0, "max": 365, "default": 0},
+    {"name": "medication_count", "label": "Jumlah Konsumsi Obat Rutin", "type": "number", "min": 0, "max": 30, "default": 1},
+    {"name": "proc_imaging_count", "label": "Jumlah Prosedur Rontgen/MRI/Scan", "type": "number", "min": 0, "max": 20, "default": 1},
+    {"name": "proc_surgery_count", "label": "Jumlah Tindakan Operasi/Pembedahan", "type": "number", "min": 0, "max": 10, "default": 0},
+    {"name": "proc_physio_count", "label": "Jumlah Sesi Fisioterapi", "type": "number", "min": 0, "max": 30, "default": 0},
+    {"name": "proc_consult_count", "label": "Jumlah Konsultasi Dokter Spesialis", "type": "number", "min": 0, "max": 30, "default": 2},
+    {"name": "proc_lab_count", "label": "Jumlah Tes Laboratorium", "type": "number", "min": 0, "max": 50, "default": 1}
+]
+total_langkah = len(fitur_info)
 
-fitur = [
-    'Nama', 'age', 'sex', 'region', 'urban_rural', 'income', 
-    'education', 'marital_status', 'employment_status', 'household_size', 
-    'dependents', 'bmi', 'smoker', 'alcohol_freq', 'visits_last_year', 
-    'hospitalizations_last_3yrs', 'days_hospitalized_last_3yrs', 
-    'medication_count', 'systolic_bp', 'diastolic_bp', 'ldl', 'hba1c', 
-    'plan_type', 'network_tier', 'deductible', 'copay', 'policy_term_years', 
-    'policy_changes_last_2yrs', 'provider_quality', 'risk_score', 
-    'annual_medical_cost', 'annual_premium', 'monthly_premium', 'claims_count', 
-    'avg_claim_amount', 'total_claims_paid', 'chronic_count', 'hypertension', 
-    'diabetes', 'asthma', 'copd', 'cardiovascular_disease', 'cancer_history', 
-    'kidney_disease', 'liver_disease', 'arthritis', 'mental_health', 
-    'proc_imaging_count', 'proc_surgery_count', 'proc_physio_count', 
-    'proc_consult_count', 'proc_lab_count', 'had_major_procedure'
-] 
-total_langkah = len(fitur)
-
-# Jika masih dalam proses input
+# --- 5. LOGIKA FORM INPUT STEP-BY-STEP ---
 if st.session_state.inputan <= total_langkah:
     index_saat_ini = st.session_state.inputan - 1
-    nama_fitur_sekarang = fitur[index_saat_ini]
+    fitur_sekarang = fitur_info[index_saat_ini]
+    nama_fitur = fitur_sekarang["name"]
     
     st.write(f"**Langkah ke-{st.session_state.inputan} Dari {total_langkah}**")
     
-    st.text_input(
-        f"Masukkan nilai untuk {nama_fitur_sekarang}:", 
-        value=sampel_data.get(nama_fitur_sekarang, 0), 
-        key=nama_fitur_sekarang, 
-    )
-    
+    # Render input interaktif berdasarkan tipe fitur
+    if fitur_sekarang["type"] == "select":
+        opsi_pilihan = categories_dict[nama_fitur]
+        st.selectbox(fitur_sekarang["label"], options=opsi_pilihan, key=nama_fitur)
+    elif fitur_sekarang["type"] == "number":
+        st.number_input(fitur_sekarang["label"], min_value=fitur_sekarang["min"], max_value=fitur_sekarang["max"], value=fitur_sekarang["default"], step=1, key=nama_fitur)
+    elif fitur_sekarang["type"] == "float":
+        st.number_input(fitur_sekarang["label"], min_value=fitur_sekarang["min"], max_value=fitur_sekarang["max"], value=fitur_sekarang["default"], step=0.1, key=nama_fitur)
+        
+    # Tombol Kontrol Navigasi
     col1, col2, col3 = st.columns(3)
     with col1:
         st.button("⬅️ Undo", on_click=undo, disabled=(st.session_state.inputan == 1))
     with col2:
-        # Pindahkan pemanggilan fungsi lanjut_step ke tombol Next ini
-        st.button("➡️ Next", on_click=lanjut_step, args=(nama_fitur_sekarang,))
+        st.button("➡️ Next", on_click= lanjut_step, args=(nama_fitur,))
     with col3:
         st.button("🔄 Reset", on_click=reset)
 
-# Jika semua input sudah selesai
-# Jika semua input sudah selesai
+# --- 6. PROSES PREDIKSI & KOMPARASI ---
 elif st.session_state.inputan > total_langkah:
     st.success("🎉 Semua data telah berhasil diisi!")
     
-    st.write("### 📊 Komparasi Model Prediksi")
-    st.write("Klik tombol di bawah ini untuk melihat perbandingan hasil prediksi dari keempat model secara bersamaan.")
-    
-    # Tombol untuk melakukan prediksi menggunakan semua model
-    if st.button("🔍 Jalankan Semua Model"):
-        st.write("Menyiapkan data dan menganalisis...")
+    if st.button("🔍 Jalankan Komparasi Semua Model"):
+        st.write("Sedang memproses data dan melakukan scaling...")
         
-        # 1. Ambil data dictionary
+        # Ambil data input user
         data_user = st.session_state.jawaban_user.copy()
-        
-        # Hapus fitur 'Nama'
-        if 'Nama' in data_user:
-            del data_user['Nama']
-            
-        # 2. Jadikan Pandas DataFrame
         df_input = pd.DataFrame([data_user])
         
+        # Samakan urutan kolomnya persis dengan feature_cols saat training
+        df_input = df_input[feature_cols]
+        
         try:
-            # 3. Konversi Tipe Data
-            kolom_float = ['bmi', 'income', 'systolic_bp', 'diastolic_bp', 'ldl', 'hba1c', 'deductible', 'copay', 'risk_score', 'annual_medical_cost', 'annual_premium', 'monthly_premium', 'avg_claim_amount', 'total_claims_paid']
+            # Lakukan Label Encoding untuk kolom teks secara otomatis
+            for col in ['sex', 'smoker', 'alcohol_freq']:
+                le = encoders_dict[col]
+                df_input[col] = le.transform(df_input[col].astype(str))
+                
+            # Jalankan RobustScaler agar nilainya dipahami oleh model
+            data_scaled = scaler_obj.transform(df_input)
             
-            for col in df_input.columns:
-                if col in kolom_float:
-                    df_input[col] = pd.to_numeric(df_input[col], errors='coerce')
-                else:
-                    df_input[col] = pd.to_numeric(df_input[col], errors='ignore')
+            # Prediksi menggunakan ke-4 model
+            hasil_komparasi_angka = {}
+            hasil_komparasi_teks = {}
             
-            # 4. Lakukan Prediksi untuk SEMUA model
-            hasil_komparasi = {}
-            
-            # Looping untuk menjalankan prediksi pada tiap model di dictionary
             for nama_model, model_aktif in pilihan_model_dict.items():
-                hasil_prediksi = model_aktif.predict(df_input)
-                # Ambil nilai hasilnya dan pastikan formatnya float/angka
-                nilai_hasil = float(hasil_prediksi[0] if hasattr(hasil_prediksi, '__len__') else hasil_prediksi)
-                hasil_komparasi[nama_model] = nilai_hasil
+                pred = model_aktif.predict(data_scaled)
+                nilai_prediksi = int(pred[0])
+                
+                hasil_komparasi_angka[nama_model] = nilai_prediksi
+                hasil_komparasi_teks[nama_model] = "High Risk 🚨" if nilai_prediksi == 1 else "Low Risk ✅"
             
-            # 5. Tampilkan Output UI Komparasi
+            # TAMPILKAN HASIL UTAMA
             st.write("---")
-            st.subheader("Hasil Analisis")
+            st.subheader("Hasil Analisis Risiko Kesehatan Pasien")
             
-            # Tampilkan nilai di bagian atas menggunakan UI kolom Streamlit
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("XGBoost", f"{hasil_komparasi['XGBoost']:.2f}")
-            col2.metric("Linear Regression", f"{hasil_komparasi['Linear Regression']:.2f}")
-            col3.metric("Random Forest", f"{hasil_komparasi['Random Forest']:.2f}")
-            col4.metric("Decision Tree", f"{hasil_komparasi['Decision Tree']:.2f}")
+            col1.metric("XGBoost (Best)", hasil_komparasi_teks["XGBoost"])
+            col2.metric("Logistic Regression", hasil_komparasi_teks["Logistic Regression"])
+            col3.metric("Random Forest", hasil_komparasi_teks["Random Forest"])
+            col4.metric("Decision Tree", hasil_komparasi_teks["Decision Tree"])
             
+            # TAMPILKAN GRAFIK
             st.write("---")
-            
-            # Tampilkan dalam bentuk Tabel dan Grafik secara berdampingan
             tabel_col, grafik_col = st.columns([1, 2])
             
-            # Ubah dictionary hasil menjadi DataFrame agar mudah dibuat grafik
-            df_hasil = pd.DataFrame(list(hasil_komparasi.items()), columns=['Nama Model', 'Nilai Prediksi'])
+            df_hasil = pd.DataFrame(list(hasil_komparasi_angka.items()), columns=['Nama Model', 'Nilai Risiko (0=Rendah, 1=Tinggi)'])
             
             with tabel_col:
-                st.write("**Tabel Data:**")
+                st.write("**Tabel Angka:**")
                 st.dataframe(df_hasil, hide_index=True)
                 
             with grafik_col:
-                st.write("**Grafik Perbandingan:**")
-                # Set index ke Nama Model agar sumbu X pada chart sesuai
-                df_chart = df_hasil.set_index('Nama Model')
-                st.bar_chart(df_chart)
+                st.write("**Grafik Batang Perbandingan:**")
+                st.bar_chart(df_hasil.set_index('Nama Model'))
                 
         except Exception as e:
-            st.error(f"**Terjadi error saat prediksi:** {e}")
-            st.info("""
-            **Saran Perbaikan:** Error di atas biasanya terjadi karena *tipe data salah* atau *kolom kategorik belum di-encode*. 
-            Pastikan format input sesuai dengan data latih (training data) sebelumnya.
-            """)
-    
+            st.error(f"Terjadi kegagalan pemrosesan model: {e}")
+            
     st.write("---")
-    st.button("Ulangi dari Awal", on_click=reset)
+    st.button("Ulangi Dari Awal", on_click=reset)
