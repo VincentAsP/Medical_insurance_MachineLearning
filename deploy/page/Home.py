@@ -21,6 +21,11 @@ def reset():
     st.session_state.clear()
     st.session_state.inputan = 1
     st.session_state.jawaban_user = {}
+    
+    # Ubah nama fungsinya
+def lanjut_step(nama_fitur):
+    st.session_state.jawaban_user[nama_fitur] = st.session_state[nama_fitur]
+    st.session_state.inputan += 1
 
 # --- CACHE MODEL ---
 # Menggunakan cache agar model tidak di-load ulang setiap kali user mengetik/klik tombol
@@ -76,7 +81,7 @@ if st.session_state.inputan <= total_langkah:
     st.text_input(
         f"Masukkan nilai untuk {nama_fitur_sekarang}:", 
         key=nama_fitur_sekarang, 
-        on_change=next
+        on_change=lanjut_step,args=(nama_fitur_sekarang,)
     )
     
     col1, col2 = st.columns(2)
