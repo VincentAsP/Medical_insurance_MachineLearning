@@ -100,7 +100,7 @@ if st.session_state.inputan <= total_langkah:
         key=nama_fitur_sekarang, 
     )
     
-    col1, col2, col3 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.button("⬅️ Undo", on_click=undo, disabled=(st.session_state.inputan == 1))
     with col2:
