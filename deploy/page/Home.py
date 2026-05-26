@@ -2,6 +2,22 @@ import streamlit as st
 import joblib
 import pandas as pd  # Pastikan import pandas untuk konversi DataFrame
 
+sampel_data = {
+    'Nama': 'Axel', 'age': 35, 'sex': 1, 'region': 2, 'urban_rural': 1, 'income': 65000, 
+    'education': 2, 'marital_status': 1, 'employment_status': 1, 'household_size': 4, 
+    'dependents': 2, 'bmi': 24.5, 'smoker': 0, 'alcohol_freq': 1, 'visits_last_year': 2, 
+    'hospitalizations_last_3yrs': 0, 'days_hospitalized_last_3yrs': 0, 'medication_count': 1, 
+    'systolic_bp': 120, 'diastolic_bp': 80, 'ldl': 110, 'hba1c': 5.4, 'plan_type': 1, 
+    'network_tier': 2, 'deductible': 1500, 'copay': 20, 'policy_term_years': 5, 
+    'policy_changes_last_2yrs': 0, 'provider_quality': 1, 'risk_score': 12.5, 
+    'annual_medical_cost': 2500, 'annual_premium': 1200, 'monthly_premium': 100, 
+    'claims_count': 1, 'avg_claim_amount': 500, 'total_claims_paid': 500, 'chronic_count': 0, 
+    'hypertension': 0, 'diabetes': 0, 'asthma': 0, 'copd': 0, 'cardiovascular_disease': 0, 
+    'cancer_history': 0, 'kidney_disease': 0, 'liver_disease': 0, 'arthritis': 0, 
+    'mental_health': 0, 'proc_imaging_count': 1, 'proc_surgery_count': 0, 
+    'proc_physio_count': 0, 'proc_consult_count': 2, 'proc_lab_count': 1, 'had_major_procedure': 0
+}
+
 if "inputan" not in st.session_state:
     st.session_state.inputan = 1
     
@@ -80,6 +96,7 @@ if st.session_state.inputan <= total_langkah:
     
     st.text_input(
         f"Masukkan nilai untuk {nama_fitur_sekarang}:", 
+        value=sampel_data.get(nama_fitur_sekarang, 0), 
         key=nama_fitur_sekarang, 
         on_change=lanjut_step,args=(nama_fitur_sekarang,)
     )
