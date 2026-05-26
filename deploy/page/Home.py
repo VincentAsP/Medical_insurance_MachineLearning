@@ -98,13 +98,15 @@ if st.session_state.inputan <= total_langkah:
         f"Masukkan nilai untuk {nama_fitur_sekarang}:", 
         value=sampel_data.get(nama_fitur_sekarang, 0), 
         key=nama_fitur_sekarang, 
-        on_change=lanjut_step,args=(nama_fitur_sekarang,)
     )
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(2)
     with col1:
         st.button("⬅️ Undo", on_click=undo, disabled=(st.session_state.inputan == 1))
     with col2:
+        # Pindahkan pemanggilan fungsi lanjut_step ke tombol Next ini
+        st.button("➡️ Next", on_click=lanjut_step, args=(nama_fitur_sekarang,))
+    with col3:
         st.button("🔄 Reset", on_click=reset)
 
 # Jika semua input sudah selesai
