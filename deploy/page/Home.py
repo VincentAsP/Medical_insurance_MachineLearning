@@ -86,26 +86,21 @@ if st.session_state.inputan <= total_langkah:
         st.button("🔄 Reset", on_click=reset)
 
 # Jika semua input sudah selesai
+# Jika semua input sudah selesai
 elif st.session_state.inputan > total_langkah:
     st.success("🎉 Semua data telah berhasil diisi!")
     
-    st.write("### Pilih Model Prediksi")
-    nama_model_terpilih = st.selectbox(
-        "Pilih model machine learning yang ingin digunakan:",
-        ("XGBoost", "Linear Regression", "Random Forest", "Decision Tree")
-    )
+    st.write("### 📊 Komparasi Model Prediksi")
+    st.write("Klik tombol di bawah ini untuk melihat perbandingan hasil prediksi dari keempat model secara bersamaan.")
     
-    # Ambil model dari dictionary berdasarkan dropdown
-    model_aktif = pilihan_model_dict[nama_model_terpilih]
-    
-    # Tombol untuk melakukan prediksi
-    if st.button(f"🔍 Cek Prediksi Asuransi dengan {nama_model_terpilih}"):
-        st.write(f"Menyiapkan data untuk **{nama_model_terpilih}**...")
+    # Tombol untuk melakukan prediksi menggunakan semua model
+    if st.button("🔍 Jalankan Semua Model"):
+        st.write("Menyiapkan data dan menganalisis...")
         
         # 1. Ambil data dictionary
         data_user = st.session_state.jawaban_user.copy()
         
-        # Hapus fitur 'Nama' karena model ML tidak memproses nama
+        # Hapus fitur 'Nama'
         if 'Nama' in data_user:
             del data_user['Nama']
             
@@ -113,37 +108,59 @@ elif st.session_state.inputan > total_langkah:
         df_input = pd.DataFrame([data_user])
         
         try:
-            # --- ⚠️ PENTING: KONVERSI TIPE DATA ⚠️ ---
-            # Karena kamu pakai st.text_input, semua data masuk sebagai String (Teks).
-            # Model ML akan error jika dikasih string. Kita harus ubah ke angka.
-            
-            # Ubah tipe data numerik menjadi integer atau float sesuai kebutuhan
-            # (Pastikan kamu menyesuaikan nama kolom di bawah ini jika ada yang kurang/berbeda format)
+            # 3. Konversi Tipe Data
             kolom_float = ['bmi', 'income', 'systolic_bp', 'diastolic_bp', 'ldl', 'hba1c', 'deductible', 'copay', 'risk_score', 'annual_medical_cost', 'annual_premium', 'monthly_premium', 'avg_claim_amount', 'total_claims_paid']
             
             for col in df_input.columns:
                 if col in kolom_float:
                     df_input[col] = pd.to_numeric(df_input[col], errors='coerce')
                 else:
-                    # Asumsikan sisanya adalah integer atau kolom kategorik yang sudah diinput dalam bentuk angka (0/1/2)
-                    # Jika user mengetik huruf ('Male'), to_numeric dengan errors='ignore' akan membiarkannya tetap string,
-                    # tapi kamu HARUS melakukan encoding manual jika modelmu butuh format angka.
                     df_input[col] = pd.to_numeric(df_input[col], errors='ignore')
             
-            # 3. Lakukan Prediksi
-            hasil_prediksi = model_aktif.predict(df_input)
+            # 4. Lakukan Prediksi untuk SEMUA model
+            hasil_komparasi = {}
             
-            # 4. Ambil nilai hasilnya (biasanya berbentuk array [1] atau [15000])
-            nilai_hasil = hasil_prediksi[0] if hasattr(hasil_prediksi, '__len__') else hasil_prediksi
+            # Looping untuk menjalankan prediksi pada tiap model di dictionary
+            for nama_model, model_aktif in pilihan_model_dict.items():
+                hasil_prediksi = model_aktif.predict(df_input)
+                # Ambil nilai hasilnya dan pastikan formatnya float/angka
+                nilai_hasil = float(hasil_prediksi[0] if hasattr(hasil_prediksi, '__len__') else hasil_prediksi)
+                hasil_komparasi[nama_model] = nilai_hasil
             
-            # 5. Tampilkan Output
-            st.success(f"### Output Prediksi: {nilai_hasil}")
+            # 5. Tampilkan Output UI Komparasi
+            st.write("---")
+            st.subheader("Hasil Analisis")
             
+            # Tampilkan nilai di bagian atas menggunakan UI kolom Streamlit
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("XGBoost", f"{hasil_komparasi['XGBoost']:.2f}")
+            col2.metric("Linear Regression", f"{hasil_komparasi['Linear Regression']:.2f}")
+            col3.metric("Random Forest", f"{hasil_komparasi['Random Forest']:.2f}")
+            col4.metric("Decision Tree", f"{hasil_komparasi['Decision Tree']:.2f}")
+            
+            st.write("---")
+            
+            # Tampilkan dalam bentuk Tabel dan Grafik secara berdampingan
+            tabel_col, grafik_col = st.columns([1, 2])
+            
+            # Ubah dictionary hasil menjadi DataFrame agar mudah dibuat grafik
+            df_hasil = pd.DataFrame(list(hasil_komparasi.items()), columns=['Nama Model', 'Nilai Prediksi'])
+            
+            with tabel_col:
+                st.write("**Tabel Data:**")
+                st.dataframe(df_hasil, hide_index=True)
+                
+            with grafik_col:
+                st.write("**Grafik Perbandingan:**")
+                # Set index ke Nama Model agar sumbu X pada chart sesuai
+                df_chart = df_hasil.set_index('Nama Model')
+                st.bar_chart(df_chart)
+                
         except Exception as e:
             st.error(f"**Terjadi error saat prediksi:** {e}")
             st.info("""
             **Saran Perbaikan:** Error di atas biasanya terjadi karena *tipe data salah* atau *kolom kategorik belum di-encode*. 
-            Pastikan jika modelmu meminta `sex` berformat `0/1`, maka user juga harus menginput angka `0` atau `1` (bukan mengetik 'Male' atau 'Female').
+            Pastikan format input sesuai dengan data latih (training data) sebelumnya.
             """)
     
     st.write("---")
