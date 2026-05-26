@@ -27,10 +27,10 @@ def reset():
 @st.cache_resource
 def load_all_models():
     return {
-        "XGBoost": joblib.load('deploy/XGB_pkl'),
-        "Linear Regression": joblib.load('deploy/LR_pkl'),
-        "Random Forest": joblib.load('deploy/RF_pkl'),
-        "Decision Tree": joblib.load('deploy/DT_pkl')
+        "XGBoost": joblib.load('deploy/XGB.pkl'),
+        "Linear Regression": joblib.load('deploy/LR.pkl'),
+        "Random Forest": joblib.load('deploy/RF.pkl'),
+        "Decision Tree": joblib.load('deploy/DT.pkl')
     }
 
 pilihan_model_dict = load_all_models()
