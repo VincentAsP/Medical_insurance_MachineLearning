@@ -28,7 +28,6 @@ def reset():
 # --- 2. CACHE PREPROCESSING (SCALER & ENCODER) ---
 @st.cache_resource
 def setup_preprocessing():
-    # Mengantisipasi letak file csv di root atau di dalam folder deploy
     try:
         df = pd.read_csv('deploy/medical_insurance.csv')
     except:
@@ -36,7 +35,6 @@ def setup_preprocessing():
         
     df['alcohol_freq'] = df['alcohol_freq'].fillna('Unknown')
     
-    # Fit Label Encoders persis seperti di Cell 6 Notebook
     cat_cols = ['sex', 'smoker', 'alcohol_freq']
     encoders = {}
     categories = {}
@@ -46,7 +44,6 @@ def setup_preprocessing():
         encoders[col] = le
         categories[col] = list(le.classes_)
         
-    # 18 Fitur asli dari Cell 7 Notebook kamu
     feature_cols = [
         'age', 'sex', 'bmi', 'smoker', 'alcohol_freq',
         'systolic_bp', 'diastolic_bp', 'ldl', 'hba1c',
@@ -67,7 +64,6 @@ scaler_obj, encoders_dict, feature_cols, categories_dict = setup_preprocessing()
 # --- 3. CACHE MODEL ML ---
 @st.cache_resource
 def load_all_models():
-    # Menyesuaikan nama file dengan versi ekstensi .pkl yang benar
     return {
         "XGBoost": joblib.load('deploy/XGB.pkl'),
         "Logistic Regression": joblib.load('deploy/LR.pkl'),
@@ -88,7 +84,6 @@ st.write("""
 
 st.markdown("<h2 style='color:cyan'>Prediksi & Komparasi Risiko Kesehatan</h2>", unsafe_allow_html=True)
 
-# Definisikan informasi ke-18 fitur agar UI-nya rapi dan otomatis terisi data sampel
 fitur_info = [
     {"name": "age", "label": "Usia Pasien (Tahun)", "type": "number", "min": 0, "max": 120, "default": 35},
     {"name": "sex", "label": "Jenis Kelamin", "type": "select"},
@@ -119,7 +114,6 @@ if st.session_state.inputan <= total_langkah:
     
     st.write(f"**Langkah ke-{st.session_state.inputan} Dari {total_langkah}**")
     
-    # Render input interaktif berdasarkan tipe fitur
     if fitur_sekarang["type"] == "select":
         opsi_pilihan = categories_dict[nama_fitur]
         st.selectbox(fitur_sekarang["label"], options=opsi_pilihan, key=nama_fitur)
@@ -128,12 +122,11 @@ if st.session_state.inputan <= total_langkah:
     elif fitur_sekarang["type"] == "float":
         st.number_input(fitur_sekarang["label"], min_value=fitur_sekarang["min"], max_value=fitur_sekarang["max"], value=fitur_sekarang["default"], step=0.1, key=nama_fitur)
         
-    # Tombol Kontrol Navigasi
     col1, col2, col3 = st.columns(3)
     with col1:
         st.button("⬅️ Undo", on_click=undo, disabled=(st.session_state.inputan == 1))
     with col2:
-        st.button("➡️ Next", on_click= lanjut_step, args=(nama_fitur,))
+        st.button("➡️ Next", on_click=lanjut_step, args=(nama_fitur,))
     with col3:
         st.button("🔄 Reset", on_click=reset)
 
@@ -144,23 +137,17 @@ elif st.session_state.inputan > total_langkah:
     if st.button("🔍 Jalankan Komparasi Semua Model"):
         st.write("Sedang memproses data dan melakukan scaling...")
         
-        # Ambil data input user
         data_user = st.session_state.jawaban_user.copy()
         df_input = pd.DataFrame([data_user])
-        
-        # Samakan urutan kolomnya persis dengan feature_cols saat training
         df_input = df_input[feature_cols]
         
         try:
-            # Lakukan Label Encoding untuk kolom teks secara otomatis
             for col in ['sex', 'smoker', 'alcohol_freq']:
                 le = encoders_dict[col]
                 df_input[col] = le.transform(df_input[col].astype(str))
                 
-            # Jalankan RobustScaler agar nilainya dipahami oleh model
             data_scaled = scaler_obj.transform(df_input)
             
-            # Prediksi menggunakan ke-4 model
             hasil_komparasi_angka = {}
             hasil_komparasi_teks = {}
             
@@ -181,19 +168,20 @@ elif st.session_state.inputan > total_langkah:
             col3.metric("Random Forest", hasil_komparasi_teks["Random Forest"])
             col4.metric("Decision Tree", hasil_komparasi_teks["Decision Tree"])
             
-            # TAMPILKAN GRAFIK
+            # --- TAMPILKAN TABEL & GRAFIK SEJAJAR (GRID DASHBOARD) ---
             st.write("---")
-            tabel_col, grafik_col = st.columns([1, 2])
+            kolom_kiri, kolom_kanan = st.columns(2)
             
             df_hasil = pd.DataFrame(list(hasil_komparasi_angka.items()), columns=['Nama Model', 'Nilai Risiko (0=Rendah, 1=Tinggi)'])
             
-            with tabel_col:
-                st.write("**Tabel Angka:**")
-                st.dataframe(df_hasil, hide_index=True)
+            with kolom_kiri:
+                st.write("### 📋 Tabel Perbandingan")
+                st.dataframe(df_hasil, hide_index=True, use_container_width=True)
                 
-            with grafik_col:
-                st.write("**Grafik Batang Perbandingan:**")
-                st.bar_chart(df_hasil.set_index('Nama Model'))
+            with kolom_kanan:
+                st.write("### 📊 Grafik Batang Risiko")
+                df_chart = df_hasil.set_index('Nama Model')
+                st.bar_chart(df_chart, use_container_width=True)
                 
         except Exception as e:
             st.error(f"Terjadi kegagalan pemrosesan model: {e}")
